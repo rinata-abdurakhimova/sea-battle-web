@@ -81,7 +81,7 @@ button {
 
 .status-panel {
   display: grid;
-  grid-template-columns: 1fr 1.6fr 1fr 0.8fr 0.8fr auto;
+  grid-template-columns: 1fr 1.6fr 1fr 0.8fr 0.8fr 0.8fr auto;
   gap: 10px;
   align-items: stretch;
   margin-bottom: 12px;

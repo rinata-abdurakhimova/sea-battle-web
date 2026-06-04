@@ -75,6 +75,7 @@ function createGame() {
   return {
     playerBoard,
     botBoard,
+    currentTurn: "human",
     gameOver: false,
     winner: null
   };
@@ -84,14 +85,16 @@ function createBoard() {
   return Array.from({ length: BOARD_SIZE }, () =>
     Array.from({ length: BOARD_SIZE }, () => ({
       hasShip: false,
-      wasShot: false
+      wasShot: false,
+      shipId: null
     }))
   );
 }
 
 function placeFleet(board) {
-  FLEET.forEach((shipLength) => {
+  FLEET.forEach((shipLength, shipIndex) => {
     let placed = false;
+    const shipId = shipIndex + 1;
 
     while (!placed) {
       const horizontal = Math.random() < 0.5;
@@ -99,7 +102,7 @@ function placeFleet(board) {
       const colIndex = getRandomIndex(BOARD_SIZE);
 
       if (canPlaceShip(board, rowIndex, colIndex, shipLength, horizontal)) {
-        placeShip(board, rowIndex, colIndex, shipLength, horizontal);
+        placeShip(board, rowIndex, colIndex, shipLength, horizontal, shipId);
         placed = true;
       }
     }
@@ -111,7 +114,7 @@ function canPlaceShip(board, rowIndex, colIndex, shipLength, horizontal) {
     const row = horizontal ? rowIndex : rowIndex + offset;
     const col = horizontal ? colIndex + offset : colIndex;
 
-    if (!isBoardCell(row, col) || board[row][col].hasShip) {
+    if (!isBoardCell(row, col) || hasNeighboringShip(board, row, col)) {
       return false;
     }
   }
@@ -119,18 +122,37 @@ function canPlaceShip(board, rowIndex, colIndex, shipLength, horizontal) {
   return true;
 }
 
-function placeShip(board, rowIndex, colIndex, shipLength, horizontal) {
+function hasNeighboringShip(board, rowIndex, colIndex) {
+  for (let row = rowIndex - 1; row <= rowIndex + 1; row += 1) {
+    for (let col = colIndex - 1; col <= colIndex + 1; col += 1) {
+      if (isBoardCell(row, col) && board[row][col].hasShip) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function placeShip(board, rowIndex, colIndex, shipLength, horizontal, shipId) {
   for (let offset = 0; offset < shipLength; offset += 1) {
     const row = horizontal ? rowIndex : rowIndex + offset;
     const col = horizontal ? colIndex + offset : colIndex;
 
     board[row][col].hasShip = true;
+    board[row][col].shipId = shipId;
   }
 }
 
 function handlePlayerAttack(socket, game, rowIndex, colIndex) {
   if (game.gameOver) {
     socket.emit("message", "The game is already over. Restart to play again.");
+    sendGameState(socket, game);
+    return;
+  }
+
+  if (game.currentTurn !== "human") {
+    socket.emit("message", "Wait for the AI Bot to finish its turn.");
     sendGameState(socket, game);
     return;
   }
@@ -151,29 +173,72 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
 
   target.wasShot = true;
 
-  if (areAllShipsSunk(game.botBoard)) {
-    game.gameOver = true;
-    game.winner = "Human";
-    socket.emit("message", `You hit ${cellName}. You win!`);
+  if (target.hasShip) {
+    const messages = [`You hit ${cellName}.`];
+    const destroyedMessage = getDestroyedShipMessage(game.botBoard, target.shipId, "human");
+
+    if (destroyedMessage) {
+      messages.push(destroyedMessage);
+    }
+
+    if (areAllShipsSunk(game.botBoard)) {
+      game.gameOver = true;
+      game.winner = "Human";
+      messages.push("You win!");
+      socket.emit("message", messages.join(" "));
+      sendGameState(socket, game);
+      socket.emit("gameOver", { winner: game.winner });
+      return;
+    }
+
+    messages.push("Shoot again.");
+    socket.emit("message", messages.join(" "));
     sendGameState(socket, game);
-    socket.emit("gameOver", { winner: game.winner });
     return;
   }
 
-  const playerResult = target.hasShip ? `You hit ${cellName}.` : `You missed ${cellName}.`;
-  const botResult = makeBotMove(game);
+  game.currentTurn = "bot";
+  const messages = [`You missed ${cellName}.`, ...makeBotTurn(game)];
 
   if (areAllShipsSunk(game.playerBoard)) {
     game.gameOver = true;
     game.winner = "AI Bot";
-    socket.emit("message", `${playerResult} ${botResult} AI Bot wins.`);
+    messages.push("AI Bot wins.");
+    socket.emit("message", messages.join(" "));
     sendGameState(socket, game);
     socket.emit("gameOver", { winner: game.winner });
     return;
   }
 
-  socket.emit("message", `${playerResult} ${botResult}`);
+  socket.emit("message", messages.join(" "));
   sendGameState(socket, game);
+}
+
+function makeBotTurn(game) {
+  const messages = [];
+
+  while (!game.gameOver && game.currentTurn === "bot") {
+    const result = makeBotMove(game);
+    messages.push(result.message);
+
+    if (result.hit) {
+      const destroyedMessage = getDestroyedShipMessage(game.playerBoard, result.shipId, "bot");
+
+      if (destroyedMessage) {
+        messages.push(destroyedMessage);
+      }
+
+      if (areAllShipsSunk(game.playerBoard)) {
+        game.gameOver = true;
+        game.winner = "AI Bot";
+      }
+    } else {
+      game.currentTurn = "human";
+      messages.push("Your turn.");
+    }
+  }
+
+  return messages;
 }
 
 function makeBotMove(game) {
@@ -188,7 +253,12 @@ function makeBotMove(game) {
   });
 
   if (availableCells.length === 0) {
-    return "AI Bot has no moves left.";
+    game.currentTurn = "human";
+    return {
+      hit: false,
+      shipId: null,
+      message: "AI Bot has no moves left."
+    };
   }
 
   const move = availableCells[getRandomIndex(availableCells.length)];
@@ -197,7 +267,11 @@ function makeBotMove(game) {
   target.wasShot = true;
 
   const cellName = getCellName(move.rowIndex, move.colIndex);
-  return target.hasShip ? `AI Bot hit ${cellName}.` : `AI Bot missed ${cellName}.`;
+  return {
+    hit: target.hasShip,
+    shipId: target.shipId,
+    message: target.hasShip ? `AI Bot hit ${cellName}.` : `AI Bot missed ${cellName}.`
+  };
 }
 
 function sendGameState(socket, game) {
@@ -205,7 +279,8 @@ function sendGameState(socket, game) {
     ownBoard: boardToDisplayRows(game.playerBoard, true),
     opponentBoard: boardToDisplayRows(game.botBoard, false),
     gameOver: game.gameOver,
-    winner: game.winner
+    winner: game.winner,
+    currentTurn: game.currentTurn
   });
 }
 
@@ -233,6 +308,38 @@ function areAllShipsSunk(board) {
   return board.every((row) =>
     row.every((cell) => !cell.hasShip || cell.wasShot)
   );
+}
+
+function getDestroyedShipMessage(board, shipId, actor) {
+  if (!shipId || !isShipDestroyed(board, shipId)) {
+    return "";
+  }
+
+  const shipLength = getShipCells(board, shipId).length;
+
+  if (actor === "human") {
+    return `You destroyed a ${shipLength}-cell ship.`;
+  }
+
+  return `AI Bot destroyed your ${shipLength}-cell ship.`;
+}
+
+function isShipDestroyed(board, shipId) {
+  return getShipCells(board, shipId).every((cell) => cell.wasShot);
+}
+
+function getShipCells(board, shipId) {
+  const cells = [];
+
+  board.forEach((row) => {
+    row.forEach((cell) => {
+      if (cell.shipId === shipId) {
+        cells.push(cell);
+      }
+    });
+  });
+
+  return cells;
 }
 
 function isBoardCell(rowIndex, colIndex) {

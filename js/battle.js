@@ -10,6 +10,7 @@ const actionMessage = document.getElementById("action-message");
 const serverStatus = document.getElementById("server-status");
 const playerStatus = document.getElementById("player-status");
 const opponentStatus = document.getElementById("opponent-status");
+const turnStatus = document.getElementById("turn-status");
 const resetButton = document.getElementById("reset-board");
 
 let ownBoard = [];
@@ -37,6 +38,7 @@ function connectToServer() {
     serverStatus.textContent = "Disconnected";
     playerStatus.textContent = "Waiting";
     opponentStatus.textContent = "AI Bot";
+    turnStatus.textContent = "Waiting";
   });
 
   socket.on("connectionStatus", (message) => {
@@ -52,11 +54,12 @@ function connectToServer() {
     ownBoard = state.ownBoard;
     opponentBoard = state.opponentBoard;
     gameOver = state.gameOver;
+    turnStatus.textContent = getTurnText(state.currentTurn, state.gameOver);
 
     renderBoards();
 
     if (state.gameOver) {
-      actionMessage.textContent = `${state.winner} wins. Restart to play again.`;
+      turnStatus.textContent = "Game over";
     }
   });
 
@@ -65,7 +68,7 @@ function connectToServer() {
   });
 
   socket.on("gameOver", ({ winner }) => {
-    actionMessage.textContent = `${winner} wins. Restart to play again.`;
+    turnStatus.textContent = `${winner} won`;
   });
 }
 
@@ -208,6 +211,14 @@ function isBoardCell(rowIndex, colIndex) {
     colIndex >= 0 &&
     colIndex < BOARD_SIZE
   );
+}
+
+function getTurnText(currentTurn, isGameOver) {
+  if (isGameOver) {
+    return "Game over";
+  }
+
+  return currentTurn === "human" ? "Your turn" : "AI Bot";
 }
 
 resetButton.addEventListener("click", () => {
