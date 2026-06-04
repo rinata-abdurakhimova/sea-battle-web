@@ -1,0 +1,177 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #1f2933;
+  background: #edf5f7;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.page-shell {
+  width: min(1500px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.intro {
+  max-width: 620px;
+  padding-top: 80px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #336b87;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  color: #0b2533;
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: #0b2533;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+p {
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.battle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.primary-link,
+.secondary-link,
+button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 16px;
+  color: #ffffff;
+  background: #1f6f8b;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.secondary-link {
+  color: #1f6f8b;
+  background: #ffffff;
+}
+
+.status-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr 0.8fr 0.8fr auto;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.status-panel > div,
+.table-section {
+  border: 1px solid #c6d7df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.status-panel > div {
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  color: #60717b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.table-section {
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.boards-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#own-board-table,
+#opponent-board-table {
+  width: 100%;
+  height: 330px;
+  min-width: 0;
+  min-height: 0;
+}
+
+#own-board-table .wdr-grid,
+#opponent-board-table .wdr-grid {
+  overflow: hidden;
+}
+
+#own-board-table .wdr-grid-layout .wdr-cell,
+#opponent-board-table .wdr-grid-layout .wdr-cell {
+  font-size: 12px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+@media (min-width: 1000px) and (min-height: 760px) {
+  body {
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 1000px) {
+  .boards-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body {
+    overflow: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .battle-header,
+  .status-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-header {
+    align-items: flex-start;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  #own-board-table,
+  #opponent-board-table {
+    height: 330px;
+  }
+}

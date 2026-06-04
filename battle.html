@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sea Battle Table Prototype</title>
+  <link rel="stylesheet" href="https://cdn.webdatarocks.com/latest/webdatarocks.min.css">
+  <link rel="stylesheet" href="css/battle.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="battle-header">
+      <div>
+        <p class="eyebrow">Step 4</p>
+        <h1>Sea Battle Table</h1>
+      </div>
+      <a class="secondary-link" href="index.html">Back</a>
+    </header>
+
+    <section class="status-panel" aria-live="polite">
+      <div>
+        <span class="label">Selected cell</span>
+        <strong id="selected-cell">None</strong>
+      </div>
+      <div>
+        <span class="label">Action</span>
+        <strong id="action-message">Attack the opponent board</strong>
+      </div>
+      <div>
+        <span class="label">Server</span>
+        <strong id="server-status">Not connected</strong>
+      </div>
+      <div>
+        <span class="label">Player</span>
+        <strong id="player-status">Waiting</strong>
+      </div>
+      <div>
+        <span class="label">Opponent</span>
+        <strong id="opponent-status">AI Bot</strong>
+      </div>
+      <button id="reset-board" type="button">Reset</button>
+    </section>
+
+    <section class="boards-layout">
+      <div class="table-section">
+        <h2>My board</h2>
+        <div id="own-board-table"></div>
+      </div>
+      <div class="table-section">
+        <h2>Opponent board</h2>
+        <div id="opponent-board-table"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.webdatarocks.com/latest/webdatarocks.js"></script>
+  <script src="https://cdn.webdatarocks.com/latest/webdatarocks.toolbar.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/battle.js?v=7"></script>
+</body>
+</html>
