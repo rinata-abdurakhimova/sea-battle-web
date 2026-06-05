@@ -1,9 +1,19 @@
 const BOARD_SIZE = 10;
 const TABLE_COLUMNS = 11;
 const TABLE_ROWS = 11;
-const ROW_LABEL_COLUMN_WIDTH = 46;
-const BOARD_CELL_WIDTH = 36;
-const BOARD_CELL_HEIGHT = 24;
+const ROW_LABEL_KEY = "";
+const COLUMN_KEYS = Array.from({ length: BOARD_SIZE }, (_, index) => `${index + 1} `);
+const MIN_ROW_LABEL_COLUMN_WIDTH = 42;
+const MIN_BOARD_CELL_WIDTH = 46;
+const MIN_BOARD_CELL_HEIGHT = 30;
+const WATER_SYMBOL = ".";
+const SHIP_SYMBOL = "S";
+const HIT_SYMBOL = "X";
+const MISS_SYMBOL = "o";
+const WATER_ICON_HTML = iconHtml("board-water-icon", "images/water.svg", "Water");
+const SHIP_ICON_HTML = iconHtml("board-ship-icon", "images/ship-icon.svg", "Ship");
+const HIT_ICON_HTML = iconHtml("board-hit-icon", "images/hit-ship.svg", "Hit");
+const MISS_ICON_HTML = iconHtml("board-miss-icon", "images/miss-water.svg", "Miss");
 
 const selectedCell = document.getElementById("selected-cell");
 const actionMessage = document.getElementById("action-message");
@@ -19,6 +29,10 @@ let ownTable;
 let opponentTable;
 let socket;
 let gameOver = false;
+
+function iconHtml(className, src, alt) {
+  return `<span class="board-icon-wrap"><img class="board-cell-icon ${className}" src="${src}" alt="${alt}"></span>`;
+}
 
 function connectToServer() {
   if (typeof io === "undefined") {
@@ -75,44 +89,115 @@ function connectToServer() {
 function boardToRows(board) {
   return board.map((rowCells, rowIndex) => {
     const row = {
-      row: String.fromCharCode(65 + rowIndex)
+      [ROW_LABEL_KEY]: String.fromCharCode(65 + rowIndex)
     };
 
     rowCells.forEach((cell, cellIndex) => {
-      row[`c${cellIndex + 1}`] = cell;
+      row[COLUMN_KEYS[cellIndex]] = formatCellValue(cell);
     });
 
     return row;
   });
 }
 
-function createReport(board) {
+function formatCellValue(cell) {
+  if (cell === WATER_SYMBOL) {
+    return WATER_ICON_HTML;
+  }
+
+  if (cell === SHIP_SYMBOL) {
+    return SHIP_ICON_HTML;
+  }
+
+  if (cell === HIT_SYMBOL) {
+    return HIT_ICON_HTML;
+  }
+
+  if (cell === MISS_SYMBOL) {
+    return MISS_ICON_HTML;
+  }
+
+  return cell;
+}
+
+function createReport(board, container) {
+  const tableSizes = createTableSizes(container);
+
   return {
     dataSource: {
-      data: boardToRows(board)
+      data: boardToRows(board),
+      mapping: createMapping()
     },
     options: {
       grid: {
         type: "flat",
+        showHeaders: false,
         showTotals: "off",
         showGrandTotals: "off"
       }
     },
-    tableSizes: createTableSizes()
+    tableSizes
   };
 }
 
-function createTableSizes() {
+function createMapping() {
+  const mapping = {
+    [ROW_LABEL_KEY]: {
+      type: "string",
+      caption: ""
+    }
+  };
+
+  COLUMN_KEYS.forEach((columnKey, colIndex) => {
+    mapping[columnKey] = {
+      type: "string",
+      caption: String(colIndex + 1)
+    };
+  });
+
+  return mapping;
+}
+
+function createTableSizes(container) {
+  const containerWidth = getContainerWidth(container);
+  const containerHeight = getContainerHeight(container);
+  const rowLabelWidth = Math.max(MIN_ROW_LABEL_COLUMN_WIDTH, Math.floor(containerWidth * 0.08));
+  const boardCellWidth = Math.max(
+    MIN_BOARD_CELL_WIDTH,
+    Math.floor((containerWidth - rowLabelWidth) / BOARD_SIZE)
+  );
+  const boardCellHeight = Math.max(MIN_BOARD_CELL_HEIGHT, Math.floor(containerHeight / TABLE_ROWS));
+
   return {
     columns: Array.from({ length: TABLE_COLUMNS }, (_, idx) => ({
       idx,
-      width: idx === 0 ? ROW_LABEL_COLUMN_WIDTH : BOARD_CELL_WIDTH
+      width: idx === 0 ? rowLabelWidth : boardCellWidth
     })),
     rows: Array.from({ length: TABLE_ROWS }, (_, idx) => ({
       idx,
-      height: BOARD_CELL_HEIGHT
+      height: boardCellHeight
     }))
   };
+}
+
+function getContainerWidth(container) {
+  const element = document.querySelector(container);
+
+  if (!element) {
+    return MIN_ROW_LABEL_COLUMN_WIDTH + MIN_BOARD_CELL_WIDTH * BOARD_SIZE;
+  }
+
+  return element.clientWidth || MIN_ROW_LABEL_COLUMN_WIDTH + MIN_BOARD_CELL_WIDTH * BOARD_SIZE;
+}
+
+function getContainerHeight(container) {
+  const element = document.querySelector(container);
+
+  if (!element) {
+    return MIN_BOARD_CELL_HEIGHT * TABLE_ROWS;
+  }
+
+  return element.clientHeight || MIN_BOARD_CELL_HEIGHT * TABLE_ROWS;
 }
 
 function renderBoards() {
@@ -141,14 +226,14 @@ function renderTable({ table, container, board, onClick }) {
     const newTable = new WebDataRocks({
       container,
       toolbar: false,
-      report: createReport(board)
+      report: createReport(board, container)
     });
 
     newTable.on("cellclick", onClick);
     return newTable;
   }
 
-  table.setReport(createReport(board));
+  table.setReport(createReport(board, container));
   return table;
 }
 
@@ -156,7 +241,7 @@ function handleOwnBoardClick(cell) {
   const position = getClickedPosition(cell);
 
   if (!position) {
-    actionMessage.textContent = "Click inside your board.";
+    actionMessage.textContent = "Coordinates are labels, not game cells.";
     return;
   }
 
@@ -169,7 +254,7 @@ function handleOpponentBoardClick(cell) {
   const position = getClickedPosition(cell);
 
   if (!position) {
-    actionMessage.textContent = "Click inside the opponent board.";
+    actionMessage.textContent = "Coordinates are labels, not game cells.";
     return;
   }
 
@@ -192,6 +277,10 @@ function handleOpponentBoardClick(cell) {
 function getClickedPosition(cell) {
   const rowIndex = cell.rowIndex - 1;
   const colIndex = cell.columnIndex - 1;
+
+  if (cell.type !== "value" || cell.isTotal || cell.isGrandTotal) {
+    return null;
+  }
 
   if (!isBoardCell(rowIndex, colIndex)) {
     return null;
@@ -231,6 +320,12 @@ resetButton.addEventListener("click", () => {
   }
 
   socket.emit("restartGame");
+});
+
+window.addEventListener("resize", () => {
+  if (ownBoard.length && opponentBoard.length) {
+    renderBoards();
+  }
 });
 
 connectToServer();
