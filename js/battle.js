@@ -1,11 +1,10 @@
 const BOARD_SIZE = 10;
 const TABLE_COLUMNS = 11;
 const TABLE_ROWS = 11;
-const ROW_LABEL_KEY = "";
+const ROW_LABEL_KEY = "COORDS";
 const COLUMN_KEYS = Array.from({ length: BOARD_SIZE }, (_, index) => `${index + 1} `);
-const MIN_ROW_LABEL_COLUMN_WIDTH = 42;
-const MIN_BOARD_CELL_WIDTH = 46;
-const MIN_BOARD_CELL_HEIGHT = 30;
+const ROW_LABEL_WIDTH_RATIO = 0.08;
+const MIN_WDR_TABLE_SIZE = 580;
 const WATER_SYMBOL = ".";
 const SHIP_SYMBOL = "S";
 const HIT_SYMBOL = "X";
@@ -29,6 +28,8 @@ let ownTable;
 let opponentTable;
 let socket;
 let gameOver = false;
+let boardRenderFrame;
+let initialLayoutCorrected = false;
 
 function iconHtml(className, src, alt) {
   return `<span class="board-icon-wrap"><img class="board-cell-icon ${className}" src="${src}" alt="${alt}"></span>`;
@@ -72,6 +73,11 @@ function connectToServer() {
 
     renderBoards();
 
+    if (!initialLayoutCorrected) {
+      initialLayoutCorrected = true;
+      scheduleBoardRender();
+    }
+
     if (state.gameOver) {
       turnStatus.textContent = "Game over";
     }
@@ -89,7 +95,7 @@ function connectToServer() {
 function boardToRows(board) {
   return board.map((rowCells, rowIndex) => {
     const row = {
-      [ROW_LABEL_KEY]: String.fromCharCode(65 + rowIndex)
+      [ROW_LABEL_KEY]: coordinateHtml(String.fromCharCode(65 + rowIndex))
     };
 
     rowCells.forEach((cell, cellIndex) => {
@@ -98,6 +104,10 @@ function boardToRows(board) {
 
     return row;
   });
+}
+
+function coordinateHtml(label) {
+  return `<span class="board-coordinate">${label}</span>`;
 }
 
 function formatCellValue(cell) {
@@ -121,6 +131,7 @@ function formatCellValue(cell) {
 }
 
 function createReport(board, container) {
+  prepareTableContainer(container);
   const tableSizes = createTableSizes(container);
 
   return {
@@ -138,6 +149,30 @@ function createReport(board, container) {
     },
     tableSizes
   };
+}
+
+function prepareTableContainer(container) {
+  const tableElement = document.querySelector(container);
+
+  if (!tableElement) {
+    return;
+  }
+
+  const frame = tableElement.parentElement;
+  const frameWidth = frame.clientWidth;
+  const frameHeight = frame.clientHeight;
+  const scale = Math.min(1, frameWidth / MIN_WDR_TABLE_SIZE);
+
+  if (scale < 1) {
+    tableElement.style.width = `${MIN_WDR_TABLE_SIZE}px`;
+    tableElement.style.height = `${Math.max(MIN_WDR_TABLE_SIZE, frameHeight / scale)}px`;
+    tableElement.style.transform = `scale(${scale})`;
+    return;
+  }
+
+  tableElement.style.width = "100%";
+  tableElement.style.height = "100%";
+  tableElement.style.transform = "none";
 }
 
 function createMapping() {
@@ -159,14 +194,11 @@ function createMapping() {
 }
 
 function createTableSizes(container) {
-  const containerWidth = getContainerWidth(container);
-  const containerHeight = getContainerHeight(container);
-  const rowLabelWidth = Math.max(MIN_ROW_LABEL_COLUMN_WIDTH, Math.floor(containerWidth * 0.08));
-  const boardCellWidth = Math.max(
-    MIN_BOARD_CELL_WIDTH,
-    Math.floor((containerWidth - rowLabelWidth) / BOARD_SIZE)
-  );
-  const boardCellHeight = Math.max(MIN_BOARD_CELL_HEIGHT, Math.floor(containerHeight / TABLE_ROWS));
+  const containerWidth = Math.max(TABLE_COLUMNS, getContainerWidth(container) - 6);
+  const containerHeight = Math.max(TABLE_ROWS, getContainerHeight(container) - 6);
+  const rowLabelWidth = Math.max(1, Math.floor(containerWidth * ROW_LABEL_WIDTH_RATIO));
+  const boardCellWidth = Math.max(1, Math.floor((containerWidth - rowLabelWidth) / BOARD_SIZE));
+  const boardCellHeight = Math.max(1, Math.floor(containerHeight / TABLE_ROWS));
 
   return {
     columns: Array.from({ length: TABLE_COLUMNS }, (_, idx) => ({
@@ -184,20 +216,20 @@ function getContainerWidth(container) {
   const element = document.querySelector(container);
 
   if (!element) {
-    return MIN_ROW_LABEL_COLUMN_WIDTH + MIN_BOARD_CELL_WIDTH * BOARD_SIZE;
+    return TABLE_COLUMNS;
   }
 
-  return element.clientWidth || MIN_ROW_LABEL_COLUMN_WIDTH + MIN_BOARD_CELL_WIDTH * BOARD_SIZE;
+  return element.clientWidth || TABLE_COLUMNS;
 }
 
 function getContainerHeight(container) {
   const element = document.querySelector(container);
 
   if (!element) {
-    return MIN_BOARD_CELL_HEIGHT * TABLE_ROWS;
+    return TABLE_ROWS;
   }
 
-  return element.clientHeight || MIN_BOARD_CELL_HEIGHT * TABLE_ROWS;
+  return element.clientHeight || TABLE_ROWS;
 }
 
 function renderBoards() {
@@ -221,8 +253,22 @@ function renderBoards() {
   });
 }
 
+function scheduleBoardRender() {
+  window.cancelAnimationFrame(boardRenderFrame);
+
+  boardRenderFrame = window.requestAnimationFrame(() => {
+    boardRenderFrame = window.requestAnimationFrame(() => {
+      if (ownBoard.length && opponentBoard.length) {
+        renderBoards();
+      }
+    });
+  });
+}
+
 function renderTable({ table, container, board, onClick }) {
   if (!table) {
+    blockCoordinateClicks(container);
+
     const newTable = new WebDataRocks({
       container,
       toolbar: false,
@@ -235,6 +281,31 @@ function renderTable({ table, container, board, onClick }) {
 
   table.setReport(createReport(board, container));
   return table;
+}
+
+function blockCoordinateClicks(container) {
+  const tableElement = document.querySelector(container);
+
+  if (!tableElement) {
+    return;
+  }
+
+  ["pointerdown", "click"].forEach((eventName) => {
+    tableElement.addEventListener(
+      eventName,
+      (event) => {
+        const coordinateCell = event.target.closest(
+          ".wdr-header, .wdr-column-header, .board-coordinate"
+        );
+
+        if (coordinateCell) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      },
+      true
+    );
+  });
 }
 
 function handleOwnBoardClick(cell) {
@@ -323,9 +394,7 @@ resetButton.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", () => {
-  if (ownBoard.length && opponentBoard.length) {
-    renderBoards();
-  }
+  scheduleBoardRender();
 });
 
 connectToServer();

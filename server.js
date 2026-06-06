@@ -75,6 +75,7 @@ function createGame() {
   return {
     playerBoard,
     botBoard,
+    botTargets: [],
     currentTurn: "human",
     gameOver: false,
     winner: null
@@ -242,15 +243,7 @@ function makeBotTurn(game) {
 }
 
 function makeBotMove(game) {
-  const availableCells = [];
-
-  game.playerBoard.forEach((row, rowIndex) => {
-    row.forEach((cell, colIndex) => {
-      if (!cell.wasShot) {
-        availableCells.push({ rowIndex, colIndex });
-      }
-    });
-  });
+  const availableCells = getAvailableCells(game.playerBoard);
 
   if (availableCells.length === 0) {
     game.currentTurn = "human";
@@ -261,10 +254,14 @@ function makeBotMove(game) {
     };
   }
 
-  const move = availableCells[getRandomIndex(availableCells.length)];
+  const move = getBotMove(game, availableCells);
   const target = game.playerBoard[move.rowIndex][move.colIndex];
 
   target.wasShot = true;
+
+  if (target.hasShip) {
+    addBotTargets(game, move.rowIndex, move.colIndex);
+  }
 
   const cellName = getCellName(move.rowIndex, move.colIndex);
   return {
@@ -272,6 +269,66 @@ function makeBotMove(game) {
     shipId: target.shipId,
     message: target.hasShip ? `AI Bot hit ${cellName}.` : `AI Bot missed ${cellName}.`
   };
+}
+
+function getAvailableCells(board) {
+  const availableCells = [];
+
+  board.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      if (!cell.wasShot) {
+        availableCells.push({ rowIndex, colIndex });
+      }
+    });
+  });
+
+  return availableCells;
+}
+
+function getBotMove(game, availableCells) {
+  removeInvalidBotTargets(game);
+
+  if (game.botTargets.length) {
+    return game.botTargets.shift();
+  }
+
+  return availableCells[getRandomIndex(availableCells.length)];
+}
+
+function addBotTargets(game, rowIndex, colIndex) {
+  const nearbyCells = [
+    { rowIndex: rowIndex - 1, colIndex },
+    { rowIndex: rowIndex + 1, colIndex },
+    { rowIndex, colIndex: colIndex - 1 },
+    { rowIndex, colIndex: colIndex + 1 }
+  ];
+
+  nearbyCells.forEach((target) => {
+    if (isValidBotTarget(game, target) && !hasBotTarget(game, target)) {
+      game.botTargets.push(target);
+    }
+  });
+}
+
+function removeInvalidBotTargets(game) {
+  game.botTargets = game.botTargets.filter((target) =>
+    isValidBotTarget(game, target)
+  );
+}
+
+function isValidBotTarget(game, target) {
+  return (
+    isBoardCell(target.rowIndex, target.colIndex) &&
+    !game.playerBoard[target.rowIndex][target.colIndex].wasShot
+  );
+}
+
+function hasBotTarget(game, target) {
+  return game.botTargets.some(
+    (savedTarget) =>
+      savedTarget.rowIndex === target.rowIndex &&
+      savedTarget.colIndex === target.colIndex
+  );
 }
 
 function sendGameState(socket, game) {

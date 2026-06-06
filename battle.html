@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sea Battle Table Prototype</title>
   <link rel="stylesheet" href="https://cdn.webdatarocks.com/latest/webdatarocks.min.css">
-  <link rel="stylesheet" href="css/battle.css">
+  <link rel="stylesheet" href="css/battle.css?v=26">
 </head>
 <body>
   <main class="page-shell">
@@ -45,13 +45,17 @@
     </section>
 
     <section class="boards-layout">
-      <div class="table-section">
+      <div class="table-section table-section--own">
         <h2>My board</h2>
-        <div id="own-board-table"></div>
+        <div class="board-table-frame">
+          <div id="own-board-table" class="board-table"></div>
+        </div>
       </div>
-      <div class="table-section">
+      <div class="table-section table-section--opponent">
         <h2>Opponent board</h2>
-        <div id="opponent-board-table"></div>
+        <div class="board-table-frame">
+          <div id="opponent-board-table" class="board-table"></div>
+        </div>
       </div>
     </section>
   </main>
@@ -59,6 +63,6 @@
   <script src="https://cdn.webdatarocks.com/latest/webdatarocks.js"></script>
   <script src="https://cdn.webdatarocks.com/latest/webdatarocks.toolbar.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="js/battle.js?v=17"></script>
+  <script src="js/battle.js?v=27"></script>
 </body>
 </html>
