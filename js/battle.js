@@ -1,10 +1,10 @@
 const BOARD_SIZE = 10;
-const TABLE_COLUMNS = 11;
-const TABLE_ROWS = 11;
+const GRID_SIZE = BOARD_SIZE + 1;
 const ROW_LABEL_KEY = "COORDS";
 const COLUMN_KEYS = Array.from({ length: BOARD_SIZE }, (_, index) => `${index + 1} `);
-const ROW_LABEL_WIDTH_RATIO = 0.08;
+const ROW_LABEL_WIDTH_RATIO = 0.1;
 const MIN_WDR_TABLE_SIZE = 580;
+const TABLE_SIZE_MARGIN = 6;
 const WATER_SYMBOL = ".";
 const SHIP_SYMBOL = "S";
 const HIT_SYMBOL = "X";
@@ -131,8 +131,7 @@ function formatCellValue(cell) {
 }
 
 function createReport(board, container) {
-  prepareTableContainer(container);
-  const tableSizes = createTableSizes(container);
+  const tableSizes = createTableSizes(getTableDimensions(container));
 
   return {
     dataSource: {
@@ -151,35 +150,46 @@ function createReport(board, container) {
   };
 }
 
-function prepareTableContainer(container) {
+function getTableDimensions(container) {
   const tableElement = document.querySelector(container);
 
   if (!tableElement) {
-    return;
+    return {
+      width: GRID_SIZE,
+      height: GRID_SIZE
+    };
   }
 
   const frame = tableElement.parentElement;
-  const frameWidth = frame.clientWidth;
-  const frameHeight = frame.clientHeight;
+  const frameWidth = frame.clientWidth || MIN_WDR_TABLE_SIZE;
+  const frameHeight = frame.clientHeight || MIN_WDR_TABLE_SIZE;
   const scale = Math.min(1, frameWidth / MIN_WDR_TABLE_SIZE);
+  const renderWidth = scale < 1 ? MIN_WDR_TABLE_SIZE : frameWidth;
+  const renderHeight = scale < 1
+    ? Math.max(MIN_WDR_TABLE_SIZE, frameHeight / scale)
+    : frameHeight;
 
   if (scale < 1) {
-    tableElement.style.width = `${MIN_WDR_TABLE_SIZE}px`;
-    tableElement.style.height = `${Math.max(MIN_WDR_TABLE_SIZE, frameHeight / scale)}px`;
+    tableElement.style.width = `${renderWidth}px`;
+    tableElement.style.height = `${renderHeight}px`;
     tableElement.style.transform = `scale(${scale})`;
-    return;
+  } else {
+    tableElement.style.width = "100%";
+    tableElement.style.height = "100%";
+    tableElement.style.transform = "none";
   }
 
-  tableElement.style.width = "100%";
-  tableElement.style.height = "100%";
-  tableElement.style.transform = "none";
+  return {
+    width: Math.max(GRID_SIZE, Math.floor(renderWidth) - TABLE_SIZE_MARGIN),
+    height: Math.max(GRID_SIZE, Math.floor(renderHeight) - TABLE_SIZE_MARGIN)
+  };
 }
 
 function createMapping() {
   const mapping = {
     [ROW_LABEL_KEY]: {
       type: "string",
-      caption: ""
+      caption: ROW_LABEL_KEY
     }
   };
 
@@ -193,43 +203,21 @@ function createMapping() {
   return mapping;
 }
 
-function createTableSizes(container) {
-  const containerWidth = Math.max(TABLE_COLUMNS, getContainerWidth(container) - 6);
-  const containerHeight = Math.max(TABLE_ROWS, getContainerHeight(container) - 6);
-  const rowLabelWidth = Math.max(1, Math.floor(containerWidth * ROW_LABEL_WIDTH_RATIO));
-  const boardCellWidth = Math.max(1, Math.floor((containerWidth - rowLabelWidth) / BOARD_SIZE));
-  const boardCellHeight = Math.max(1, Math.floor(containerHeight / TABLE_ROWS));
+function createTableSizes({ width, height }) {
+  const rowLabelWidth = Math.max(1, Math.floor(width * ROW_LABEL_WIDTH_RATIO));
+  const boardCellWidth = Math.max(1, Math.floor((width - rowLabelWidth) / BOARD_SIZE));
+  const boardCellHeight = Math.max(1, Math.floor(height / GRID_SIZE));
 
   return {
-    columns: Array.from({ length: TABLE_COLUMNS }, (_, idx) => ({
+    columns: Array.from({ length: GRID_SIZE }, (_, idx) => ({
       idx,
       width: idx === 0 ? rowLabelWidth : boardCellWidth
     })),
-    rows: Array.from({ length: TABLE_ROWS }, (_, idx) => ({
+    rows: Array.from({ length: GRID_SIZE }, (_, idx) => ({
       idx,
       height: boardCellHeight
     }))
   };
-}
-
-function getContainerWidth(container) {
-  const element = document.querySelector(container);
-
-  if (!element) {
-    return TABLE_COLUMNS;
-  }
-
-  return element.clientWidth || TABLE_COLUMNS;
-}
-
-function getContainerHeight(container) {
-  const element = document.querySelector(container);
-
-  if (!element) {
-    return TABLE_ROWS;
-  }
-
-  return element.clientHeight || TABLE_ROWS;
 }
 
 function renderBoards() {

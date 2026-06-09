@@ -27,8 +27,7 @@ io.on("connection", (socket) => {
   socket.emit("connectionStatus", "Connected to server");
 
   socket.on("joinGame", () => {
-    const game = createGame();
-    games.set(socket.id, game);
+    const game = startNewGame(socket);
 
     socket.emit("playerAssigned", { playerId: "Human" });
     socket.emit("connectionStatus", "Connected as Human player");
@@ -48,11 +47,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("restartGame", () => {
-    const game = createGame();
-    games.set(socket.id, game);
-
-    socket.emit("message", "New game started.");
-    sendGameState(socket, game);
+    const game = startNewGame(socket);
+    sendGameUpdate(socket, game, "New game started.");
   });
 
   socket.on("disconnect", () => {
@@ -66,20 +62,26 @@ server.listen(PORT, () => {
 });
 
 function createGame() {
-  const playerBoard = createBoard();
-  const botBoard = createBoard();
-
-  placeFleet(playerBoard);
-  placeFleet(botBoard);
-
   return {
-    playerBoard,
-    botBoard,
+    playerBoard: createBoardWithFleet(),
+    botBoard: createBoardWithFleet(),
     botTargets: [],
     currentTurn: "human",
     gameOver: false,
     winner: null
   };
+}
+
+function startNewGame(socket) {
+  const game = createGame();
+  games.set(socket.id, game);
+  return game;
+}
+
+function createBoardWithFleet() {
+  const board = createBoard();
+  placeFleet(board);
+  return board;
 }
 
 function createBoard() {
@@ -147,14 +149,12 @@ function placeShip(board, rowIndex, colIndex, shipLength, horizontal, shipId) {
 
 function handlePlayerAttack(socket, game, rowIndex, colIndex) {
   if (game.gameOver) {
-    socket.emit("message", "The game is already over. Restart to play again.");
-    sendGameState(socket, game);
+    sendGameUpdate(socket, game, "The game is already over. Restart to play again.");
     return;
   }
 
   if (game.currentTurn !== "human") {
-    socket.emit("message", "Wait for the AI Bot to finish its turn.");
-    sendGameState(socket, game);
+    sendGameUpdate(socket, game, "Wait for the AI Bot to finish its turn.");
     return;
   }
 
@@ -167,8 +167,7 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
   const cellName = getCellName(rowIndex, colIndex);
 
   if (target.wasShot) {
-    socket.emit("message", `${cellName} was already attacked.`);
-    sendGameState(socket, game);
+    sendGameUpdate(socket, game, `${cellName} was already attacked.`);
     return;
   }
 
@@ -183,36 +182,25 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
     }
 
     if (areAllShipsSunk(game.botBoard)) {
-      game.gameOver = true;
-      game.winner = "Human";
+      finishGame(game, "Human");
       messages.push("You win!");
-      socket.emit("message", messages.join(" "));
-      sendGameState(socket, game);
-      socket.emit("gameOver", { winner: game.winner });
+      sendGameUpdate(socket, game, messages, true);
       return;
     }
 
     messages.push("Shoot again.");
-    socket.emit("message", messages.join(" "));
-    sendGameState(socket, game);
+    sendGameUpdate(socket, game, messages);
     return;
   }
 
   game.currentTurn = "bot";
   const messages = [`You missed ${cellName}.`, ...makeBotTurn(game)];
 
-  if (areAllShipsSunk(game.playerBoard)) {
-    game.gameOver = true;
-    game.winner = "AI Bot";
+  if (game.gameOver) {
     messages.push("AI Bot wins.");
-    socket.emit("message", messages.join(" "));
-    sendGameState(socket, game);
-    socket.emit("gameOver", { winner: game.winner });
-    return;
   }
 
-  socket.emit("message", messages.join(" "));
-  sendGameState(socket, game);
+  sendGameUpdate(socket, game, messages, game.gameOver);
 }
 
 function makeBotTurn(game) {
@@ -230,8 +218,7 @@ function makeBotTurn(game) {
       }
 
       if (areAllShipsSunk(game.playerBoard)) {
-        game.gameOver = true;
-        game.winner = "AI Bot";
+        finishGame(game, "AI Bot");
       }
     } else {
       game.currentTurn = "human";
@@ -286,7 +273,9 @@ function getAvailableCells(board) {
 }
 
 function getBotMove(game, availableCells) {
-  removeInvalidBotTargets(game);
+  game.botTargets = game.botTargets.filter((target) =>
+    isValidBotTarget(game, target)
+  );
 
   if (game.botTargets.length) {
     return game.botTargets.shift();
@@ -304,30 +293,22 @@ function addBotTargets(game, rowIndex, colIndex) {
   ];
 
   nearbyCells.forEach((target) => {
-    if (isValidBotTarget(game, target) && !hasBotTarget(game, target)) {
+    const isSaved = game.botTargets.some(
+      (savedTarget) =>
+        savedTarget.rowIndex === target.rowIndex &&
+        savedTarget.colIndex === target.colIndex
+    );
+
+    if (isValidBotTarget(game, target) && !isSaved) {
       game.botTargets.push(target);
     }
   });
-}
-
-function removeInvalidBotTargets(game) {
-  game.botTargets = game.botTargets.filter((target) =>
-    isValidBotTarget(game, target)
-  );
 }
 
 function isValidBotTarget(game, target) {
   return (
     isBoardCell(target.rowIndex, target.colIndex) &&
     !game.playerBoard[target.rowIndex][target.colIndex].wasShot
-  );
-}
-
-function hasBotTarget(game, target) {
-  return game.botTargets.some(
-    (savedTarget) =>
-      savedTarget.rowIndex === target.rowIndex &&
-      savedTarget.colIndex === target.colIndex
   );
 }
 
@@ -339,6 +320,22 @@ function sendGameState(socket, game) {
     winner: game.winner,
     currentTurn: game.currentTurn
   });
+}
+
+function sendGameUpdate(socket, game, messages, announceWinner = false) {
+  const message = Array.isArray(messages) ? messages.join(" ") : messages;
+
+  socket.emit("message", message);
+  sendGameState(socket, game);
+
+  if (announceWinner) {
+    socket.emit("gameOver", { winner: game.winner });
+  }
+}
+
+function finishGame(game, winner) {
+  game.gameOver = true;
+  game.winner = winner;
 }
 
 function boardToDisplayRows(board, showShips) {
@@ -368,21 +365,23 @@ function areAllShipsSunk(board) {
 }
 
 function getDestroyedShipMessage(board, shipId, actor) {
-  if (!shipId || !isShipDestroyed(board, shipId)) {
+  if (!shipId) {
     return "";
   }
 
-  const shipLength = getShipCells(board, shipId).length;
+  const shipCells = getShipCells(board, shipId);
+
+  if (!shipCells.every((cell) => cell.wasShot)) {
+    return "";
+  }
+
+  const shipLength = shipCells.length;
 
   if (actor === "human") {
     return `You destroyed a ${shipLength}-cell ship.`;
   }
 
   return `AI Bot destroyed your ${shipLength}-cell ship.`;
-}
-
-function isShipDestroyed(board, shipId) {
-  return getShipCells(board, shipId).every((cell) => cell.wasShot);
 }
 
 function getShipCells(board, shipId) {
