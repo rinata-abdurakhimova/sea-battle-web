@@ -13,6 +13,8 @@ const WATER_ICON_HTML = iconHtml("board-water-icon", "images/water.svg", "Water"
 const SHIP_ICON_HTML = iconHtml("board-ship-icon", "images/ship-icon.svg", "Ship");
 const HIT_ICON_HTML = iconHtml("board-hit-icon", "images/hit-ship.svg", "Hit");
 const MISS_ICON_HTML = iconHtml("board-miss-icon", "images/miss-water.svg", "Miss");
+const requestedMode = new URLSearchParams(window.location.search).get("mode");
+const gameMode = requestedMode === "multiplayer" ? "multiplayer" : "ai";
 
 const selectedCell = document.getElementById("selected-cell");
 const actionMessage = document.getElementById("action-message");
@@ -28,6 +30,8 @@ let ownTable;
 let opponentTable;
 let socket;
 let gameOver = false;
+let isYourTurn = false;
+let opponentConnected = gameMode === "ai";
 let boardRenderFrame;
 let initialLayoutCorrected = false;
 
@@ -46,14 +50,16 @@ function connectToServer() {
 
   socket.on("connect", () => {
     serverStatus.textContent = "Socket connected";
-    socket.emit("joinGame");
+    socket.emit("joinGame", { mode: gameMode });
   });
 
   socket.on("disconnect", () => {
     serverStatus.textContent = "Disconnected";
     playerStatus.textContent = "Waiting";
-    opponentStatus.textContent = "AI Bot";
+    opponentStatus.textContent = gameMode === "ai" ? "AI Bot" : "Waiting";
     turnStatus.textContent = "Waiting";
+    isYourTurn = false;
+    opponentConnected = false;
   });
 
   socket.on("connectionStatus", (message) => {
@@ -62,14 +68,22 @@ function connectToServer() {
 
   socket.on("playerAssigned", ({ playerId }) => {
     playerStatus.textContent = playerId || "Human";
-    opponentStatus.textContent = "AI Bot";
+  });
+
+  socket.on("waitingForOpponent", () => {
+    opponentStatus.textContent = "Waiting";
+    turnStatus.textContent = "Waiting";
   });
 
   socket.on("gameState", (state) => {
     ownBoard = state.ownBoard;
     opponentBoard = state.opponentBoard;
     gameOver = state.gameOver;
-    turnStatus.textContent = getTurnText(state.currentTurn, state.gameOver);
+    isYourTurn = state.isYourTurn;
+    opponentConnected = state.opponentConnected;
+    playerStatus.textContent = state.playerId;
+    opponentStatus.textContent = getOpponentText(state);
+    turnStatus.textContent = getTurnText(state);
 
     renderBoards();
 
@@ -325,6 +339,16 @@ function handleOpponentBoardClick(cell) {
     return;
   }
 
+  if (!opponentConnected) {
+    actionMessage.textContent = "Wait for another player to join.";
+    return;
+  }
+
+  if (!isYourTurn) {
+    actionMessage.textContent = "Wait for your turn.";
+    return;
+  }
+
   if (!socket) {
     actionMessage.textContent = "Open through localhost:3000 to attack.";
     return;
@@ -361,12 +385,32 @@ function isBoardCell(rowIndex, colIndex) {
   );
 }
 
-function getTurnText(currentTurn, isGameOver) {
-  if (isGameOver) {
+function getOpponentText(state) {
+  if (state.mode === "ai") {
+    return "AI Bot";
+  }
+
+  if (!state.opponentConnected) {
+    return "Waiting";
+  }
+
+  return state.playerId === "Player 1" ? "Player 2" : "Player 1";
+}
+
+function getTurnText(state) {
+  if (state.gameOver) {
     return "Game over";
   }
 
-  return currentTurn === "human" ? "Your turn" : "AI Bot";
+  if (!state.opponentConnected) {
+    return "Waiting";
+  }
+
+  if (state.isYourTurn) {
+    return "Your turn";
+  }
+
+  return state.mode === "ai" ? "AI Bot" : "Opponent's turn";
 }
 
 resetButton.addEventListener("click", () => {

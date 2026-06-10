@@ -15,6 +15,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const games = new Map();
+let waitingSocketId = null;
+let nextRoomId = 1;
 
 app.use(express.static(__dirname));
 
@@ -26,13 +28,13 @@ io.on("connection", (socket) => {
   console.log(`Client connected: ${socket.id}`);
   socket.emit("connectionStatus", "Connected to server");
 
-  socket.on("joinGame", () => {
-    const game = startNewGame(socket);
+  socket.on("joinGame", ({ mode } = {}) => {
+    if (mode === "multiplayer") {
+      joinMultiplayerGame(socket);
+      return;
+    }
 
-    socket.emit("playerAssigned", { playerId: "Human" });
-    socket.emit("connectionStatus", "Connected as Human player");
-    socket.emit("message", "Game started. Attack the opponent board.");
-    sendGameState(socket, game);
+    startAiGame(socket);
   });
 
   socket.on("attack", ({ rowIndex, colIndex }) => {
@@ -43,16 +45,34 @@ io.on("connection", (socket) => {
       return;
     }
 
-    handlePlayerAttack(socket, game, rowIndex, colIndex);
+    if (game.mode === "multiplayer") {
+      handleMultiplayerAttack(socket, game, rowIndex, colIndex);
+      return;
+    }
+
+    handleAiPlayerAttack(socket, game, rowIndex, colIndex);
   });
 
   socket.on("restartGame", () => {
-    const game = startNewGame(socket);
-    sendGameUpdate(socket, game, "New game started.");
+    const game = games.get(socket.id);
+
+    if (!game) {
+      socket.emit("message", "Start a game first.");
+      return;
+    }
+
+    if (game.mode === "multiplayer") {
+      restartMultiplayerGame(game);
+      return;
+    }
+
+    const newGame = createAiGame();
+    games.set(socket.id, newGame);
+    sendAiGameUpdate(socket, newGame, "New game started.");
   });
 
   socket.on("disconnect", () => {
-    games.delete(socket.id);
+    leaveGame(socket);
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
@@ -61,8 +81,9 @@ server.listen(PORT, () => {
   console.log(`Sea Battle server is running at http://localhost:${PORT}`);
 });
 
-function createGame() {
+function createAiGame() {
   return {
+    mode: "ai",
     playerBoard: createBoardWithFleet(),
     botBoard: createBoardWithFleet(),
     botTargets: [],
@@ -72,10 +93,100 @@ function createGame() {
   };
 }
 
-function startNewGame(socket) {
-  const game = createGame();
+function startAiGame(socket) {
+  leaveGame(socket);
+
+  const game = createAiGame();
   games.set(socket.id, game);
-  return game;
+  socket.emit("playerAssigned", { playerId: "Human" });
+  socket.emit("connectionStatus", "Connected as Human player");
+  socket.emit("message", "Game started. Attack the opponent board.");
+  sendAiGameState(socket, game);
+}
+
+function createMultiplayerGame(socketId) {
+  return {
+    mode: "multiplayer",
+    roomId: `game-${nextRoomId++}`,
+    players: [socketId, null],
+    boards: [createBoardWithFleet(), createBoardWithFleet()],
+    currentTurn: 1,
+    gameOver: false,
+    winner: null
+  };
+}
+
+function joinMultiplayerGame(socket, waitingMessage = "Waiting for Player 2.") {
+  leaveGame(socket);
+
+  const waitingSocket = waitingSocketId
+    ? io.sockets.sockets.get(waitingSocketId)
+    : null;
+  const waitingGame = waitingSocket ? games.get(waitingSocket.id) : null;
+
+  if (!waitingSocket || !waitingGame || waitingGame.players[1]) {
+    const game = createMultiplayerGame(socket.id);
+
+    waitingSocketId = socket.id;
+    games.set(socket.id, game);
+    socket.join(game.roomId);
+    socket.emit("playerAssigned", { playerId: "Player 1" });
+    socket.emit("connectionStatus", "Connected as Player 1");
+    socket.emit("waitingForOpponent");
+    socket.emit("message", waitingMessage);
+    sendMultiplayerGameState(socket, game);
+    return;
+  }
+
+  const game = waitingGame;
+  waitingSocketId = null;
+  game.players[1] = socket.id;
+  games.set(socket.id, game);
+  socket.join(game.roomId);
+
+  waitingSocket.emit("playerAssigned", { playerId: "Player 1" });
+  socket.emit("playerAssigned", { playerId: "Player 2" });
+  waitingSocket.emit("connectionStatus", "Connected as Player 1");
+  socket.emit("connectionStatus", "Connected as Player 2");
+  sendMultiplayerUpdate(game, "Player 2 joined. Player 1 starts.");
+}
+
+function leaveGame(socket) {
+  const game = games.get(socket.id);
+
+  if (!game) {
+    return;
+  }
+
+  games.delete(socket.id);
+
+  if (game.mode !== "multiplayer") {
+    return;
+  }
+
+  if (waitingSocketId === socket.id) {
+    waitingSocketId = null;
+  }
+
+  socket.leave(game.roomId);
+
+  const opponentId = game.players.find(
+    (playerSocketId) => playerSocketId && playerSocketId !== socket.id
+  );
+  const opponentSocket = opponentId
+    ? io.sockets.sockets.get(opponentId)
+    : null;
+
+  if (!opponentSocket) {
+    return;
+  }
+
+  games.delete(opponentId);
+  opponentSocket.leave(game.roomId);
+  joinMultiplayerGame(
+    opponentSocket,
+    "Opponent left. Waiting for a new opponent."
+  );
 }
 
 function createBoardWithFleet() {
@@ -147,14 +258,14 @@ function placeShip(board, rowIndex, colIndex, shipLength, horizontal, shipId) {
   }
 }
 
-function handlePlayerAttack(socket, game, rowIndex, colIndex) {
+function handleAiPlayerAttack(socket, game, rowIndex, colIndex) {
   if (game.gameOver) {
-    sendGameUpdate(socket, game, "The game is already over. Restart to play again.");
+    sendAiGameUpdate(socket, game, "The game is already over. Restart to play again.");
     return;
   }
 
   if (game.currentTurn !== "human") {
-    sendGameUpdate(socket, game, "Wait for the AI Bot to finish its turn.");
+    sendAiGameUpdate(socket, game, "Wait for the AI Bot to finish its turn.");
     return;
   }
 
@@ -167,7 +278,7 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
   const cellName = getCellName(rowIndex, colIndex);
 
   if (target.wasShot) {
-    sendGameUpdate(socket, game, `${cellName} was already attacked.`);
+    sendAiGameUpdate(socket, game, `${cellName} was already attacked.`);
     return;
   }
 
@@ -184,12 +295,12 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
     if (areAllShipsSunk(game.botBoard)) {
       finishGame(game, "Human");
       messages.push("You win!");
-      sendGameUpdate(socket, game, messages, true);
+      sendAiGameUpdate(socket, game, messages, true);
       return;
     }
 
     messages.push("Shoot again.");
-    sendGameUpdate(socket, game, messages);
+    sendAiGameUpdate(socket, game, messages);
     return;
   }
 
@@ -200,7 +311,72 @@ function handlePlayerAttack(socket, game, rowIndex, colIndex) {
     messages.push("AI Bot wins.");
   }
 
-  sendGameUpdate(socket, game, messages, game.gameOver);
+  sendAiGameUpdate(socket, game, messages, game.gameOver);
+}
+
+function handleMultiplayerAttack(socket, game, rowIndex, colIndex) {
+  const playerNumber = getMultiplayerPlayerNumber(game, socket.id);
+  const opponentNumber = playerNumber === 1 ? 2 : 1;
+
+  if (!game.players[1]) {
+    sendMultiplayerUpdate(game, "Wait for another player to join.");
+    return;
+  }
+
+  if (game.gameOver) {
+    sendMultiplayerUpdate(game, "The game is already over. Reset to play again.");
+    return;
+  }
+
+  if (game.currentTurn !== playerNumber) {
+    socket.emit("message", "Wait for your turn.");
+    return;
+  }
+
+  if (!isBoardCell(rowIndex, colIndex)) {
+    socket.emit("message", "Attack inside the opponent board.");
+    return;
+  }
+
+  const target = game.boards[opponentNumber - 1][rowIndex][colIndex];
+  const cellName = getCellName(rowIndex, colIndex);
+
+  if (target.wasShot) {
+    socket.emit("message", `${cellName} was already attacked.`);
+    return;
+  }
+
+  target.wasShot = true;
+  const messages = [`Player ${playerNumber} attacked ${cellName}.`];
+
+  if (target.hasShip) {
+    messages.push("It was a hit.");
+
+    const destroyedMessage = getMultiplayerDestroyedShipMessage(
+      game.boards[opponentNumber - 1],
+      target.shipId,
+      playerNumber
+    );
+
+    if (destroyedMessage) {
+      messages.push(destroyedMessage);
+    }
+
+    if (areAllShipsSunk(game.boards[opponentNumber - 1])) {
+      finishGame(game, `Player ${playerNumber}`);
+      messages.push(`Player ${playerNumber} wins!`);
+      sendMultiplayerUpdate(game, messages, true);
+      return;
+    }
+
+    messages.push(`Player ${playerNumber} shoots again.`);
+    sendMultiplayerUpdate(game, messages);
+    return;
+  }
+
+  game.currentTurn = opponentNumber;
+  messages.push(`It was a miss. Player ${opponentNumber}'s turn.`);
+  sendMultiplayerUpdate(game, messages);
 }
 
 function makeBotTurn(game) {
@@ -312,25 +488,78 @@ function isValidBotTarget(game, target) {
   );
 }
 
-function sendGameState(socket, game) {
+function sendAiGameState(socket, game) {
   socket.emit("gameState", {
+    mode: "ai",
+    playerId: "Human",
     ownBoard: boardToDisplayRows(game.playerBoard, true),
     opponentBoard: boardToDisplayRows(game.botBoard, false),
+    opponentConnected: true,
+    isYourTurn: game.currentTurn === "human" && !game.gameOver,
     gameOver: game.gameOver,
     winner: game.winner,
     currentTurn: game.currentTurn
   });
 }
 
-function sendGameUpdate(socket, game, messages, announceWinner = false) {
+function sendAiGameUpdate(socket, game, messages, announceWinner = false) {
   const message = Array.isArray(messages) ? messages.join(" ") : messages;
 
   socket.emit("message", message);
-  sendGameState(socket, game);
+  sendAiGameState(socket, game);
 
   if (announceWinner) {
     socket.emit("gameOver", { winner: game.winner });
   }
+}
+
+function sendMultiplayerGameState(socket, game) {
+  const playerNumber = getMultiplayerPlayerNumber(game, socket.id);
+  const opponentNumber = playerNumber === 1 ? 2 : 1;
+
+  socket.emit("gameState", {
+    mode: "multiplayer",
+    playerId: `Player ${playerNumber}`,
+    ownBoard: boardToDisplayRows(game.boards[playerNumber - 1], true),
+    opponentBoard: boardToDisplayRows(game.boards[opponentNumber - 1], false),
+    opponentConnected: Boolean(game.players[opponentNumber - 1]),
+    isYourTurn:
+      Boolean(game.players[1]) &&
+      game.currentTurn === playerNumber &&
+      !game.gameOver,
+    gameOver: game.gameOver,
+    winner: game.winner,
+    currentTurn: game.currentTurn
+  });
+}
+
+function sendMultiplayerUpdate(game, messages, announceWinner = false) {
+  const message = Array.isArray(messages) ? messages.join(" ") : messages;
+
+  game.players.forEach((playerSocketId) => {
+    const playerSocket = playerSocketId
+      ? io.sockets.sockets.get(playerSocketId)
+      : null;
+
+    if (!playerSocket) {
+      return;
+    }
+
+    playerSocket.emit("message", message);
+    sendMultiplayerGameState(playerSocket, game);
+
+    if (announceWinner) {
+      playerSocket.emit("gameOver", { winner: game.winner });
+    }
+  });
+}
+
+function restartMultiplayerGame(game) {
+  game.boards = [createBoardWithFleet(), createBoardWithFleet()];
+  game.currentTurn = 1;
+  game.gameOver = false;
+  game.winner = null;
+  sendMultiplayerUpdate(game, "New game started. Player 1 starts.");
 }
 
 function finishGame(game, winner) {
@@ -384,6 +613,16 @@ function getDestroyedShipMessage(board, shipId, actor) {
   return `AI Bot destroyed your ${shipLength}-cell ship.`;
 }
 
+function getMultiplayerDestroyedShipMessage(board, shipId, playerNumber) {
+  const shipCells = getShipCells(board, shipId);
+
+  if (!shipCells.every((cell) => cell.wasShot)) {
+    return "";
+  }
+
+  return `Player ${playerNumber} destroyed a ${shipCells.length}-cell ship.`;
+}
+
 function getShipCells(board, shipId) {
   const cells = [];
 
@@ -405,6 +644,10 @@ function isBoardCell(rowIndex, colIndex) {
     colIndex >= 0 &&
     colIndex < BOARD_SIZE
   );
+}
+
+function getMultiplayerPlayerNumber(game, socketId) {
+  return game.players.indexOf(socketId) + 1;
 }
 
 function getCellName(rowIndex, colIndex) {
