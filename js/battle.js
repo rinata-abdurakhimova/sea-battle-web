@@ -2,9 +2,8 @@ const BOARD_SIZE = 10;
 const GRID_SIZE = BOARD_SIZE + 1;
 const ROW_LABEL_KEY = "COORDS";
 const COLUMN_KEYS = Array.from({ length: BOARD_SIZE }, (_, index) => `${index + 1} `);
-const ROW_LABEL_WIDTH_RATIO = 0.1;
 const MIN_WDR_TABLE_SIZE = 580;
-const TABLE_SIZE_MARGIN = 6;
+const WDR_SIZE_OFFSET = 6;
 const WATER_SYMBOL = ".";
 const SHIP_SYMBOL = "S";
 const HIT_SYMBOL = "X";
@@ -175,27 +174,56 @@ function getTableDimensions(container) {
   }
 
   const frame = tableElement.parentElement;
-  const frameWidth = frame.clientWidth || MIN_WDR_TABLE_SIZE;
-  const frameHeight = frame.clientHeight || MIN_WDR_TABLE_SIZE;
-  const scale = Math.min(1, frameWidth / MIN_WDR_TABLE_SIZE);
-  const renderWidth = scale < 1 ? MIN_WDR_TABLE_SIZE : frameWidth;
-  const renderHeight = scale < 1
-    ? Math.max(MIN_WDR_TABLE_SIZE, frameHeight / scale)
-    : frameHeight;
+  const tableSection = frame.parentElement;
+  tableSection.style.width = "100%";
+  tableSection.style.height = "100%";
+
+  const sectionStyles = getComputedStyle(tableSection);
+  const horizontalPadding =
+    parseFloat(sectionStyles.paddingLeft) +
+    parseFloat(sectionStyles.paddingRight);
+  const verticalPadding =
+    parseFloat(sectionStyles.paddingTop) +
+    parseFloat(sectionStyles.paddingBottom);
+  const heading = tableSection.querySelector("h2");
+  const headingStyles = heading ? getComputedStyle(heading) : null;
+  const headingHeight = heading
+    ? heading.offsetHeight + parseFloat(headingStyles.marginBottom)
+    : 0;
+  const availableWidth = tableSection.clientWidth - horizontalPadding;
+  const remainingHeight =
+    tableSection.clientHeight - verticalPadding - headingHeight;
+  const pageUsesFixedGrid =
+    getComputedStyle(document.querySelector(".page-shell")).display === "grid";
+  const availableHeight = pageUsesFixedGrid
+    ? remainingHeight
+    : availableWidth;
+  const visibleSize = Math.min(availableWidth, availableHeight);
+  const scale = Math.min(1, visibleSize / MIN_WDR_TABLE_SIZE);
+  const renderSize = visibleSize / scale;
+  const borderWidth = tableSection.offsetWidth - tableSection.clientWidth;
+  const borderHeight = tableSection.offsetHeight - tableSection.clientHeight;
+
+  tableSection.style.width =
+    `${visibleSize + horizontalPadding + borderWidth}px`;
+  tableSection.style.height =
+    `${visibleSize + verticalPadding + headingHeight + borderHeight}px`;
+  frame.style.width = `${visibleSize}px`;
+  frame.style.height = `${visibleSize}px`;
 
   if (scale < 1) {
-    tableElement.style.width = `${renderWidth}px`;
-    tableElement.style.height = `${renderHeight}px`;
+    tableElement.style.width = `${renderSize}px`;
+    tableElement.style.height = `${renderSize}px`;
     tableElement.style.transform = `scale(${scale})`;
   } else {
-    tableElement.style.width = "100%";
-    tableElement.style.height = "100%";
+    tableElement.style.width = `${renderSize}px`;
+    tableElement.style.height = `${renderSize}px`;
     tableElement.style.transform = "none";
   }
 
   return {
-    width: Math.max(GRID_SIZE, Math.floor(renderWidth) - TABLE_SIZE_MARGIN),
-    height: Math.max(GRID_SIZE, Math.floor(renderHeight) - TABLE_SIZE_MARGIN)
+    width: Math.floor(renderSize) - WDR_SIZE_OFFSET,
+    height: Math.floor(renderSize) - WDR_SIZE_OFFSET
   };
 }
 
@@ -218,18 +246,16 @@ function createMapping() {
 }
 
 function createTableSizes({ width, height }) {
-  const rowLabelWidth = Math.max(1, Math.floor(width * ROW_LABEL_WIDTH_RATIO));
-  const boardCellWidth = Math.max(1, Math.floor((width - rowLabelWidth) / BOARD_SIZE));
-  const boardCellHeight = Math.max(1, Math.floor(height / GRID_SIZE));
+  const cellSize = Math.floor(Math.min(width, height) / GRID_SIZE);
 
   return {
     columns: Array.from({ length: GRID_SIZE }, (_, idx) => ({
       idx,
-      width: idx === 0 ? rowLabelWidth : boardCellWidth
+      width: cellSize
     })),
     rows: Array.from({ length: GRID_SIZE }, (_, idx) => ({
       idx,
-      height: boardCellHeight
+      height: cellSize
     }))
   };
 }
