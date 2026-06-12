@@ -167,59 +167,17 @@ function getTableDimensions(container) {
   const tableElement = document.querySelector(container);
 
   if (!tableElement) {
-    return {
-      width: GRID_SIZE,
-      height: GRID_SIZE
-    };
+    return { width: GRID_SIZE, height: GRID_SIZE };
   }
 
   const frame = tableElement.parentElement;
-  const tableSection = frame.parentElement;
-  tableSection.style.width = "100%";
-  tableSection.style.height = "100%";
-
-  const sectionStyles = getComputedStyle(tableSection);
-  const horizontalPadding =
-    parseFloat(sectionStyles.paddingLeft) +
-    parseFloat(sectionStyles.paddingRight);
-  const verticalPadding =
-    parseFloat(sectionStyles.paddingTop) +
-    parseFloat(sectionStyles.paddingBottom);
-  const heading = tableSection.querySelector("h2");
-  const headingStyles = heading ? getComputedStyle(heading) : null;
-  const headingHeight = heading
-    ? heading.offsetHeight + parseFloat(headingStyles.marginBottom)
-    : 0;
-  const availableWidth = tableSection.clientWidth - horizontalPadding;
-  const remainingHeight =
-    tableSection.clientHeight - verticalPadding - headingHeight;
-  const pageUsesFixedGrid =
-    getComputedStyle(document.querySelector(".page-shell")).display === "grid";
-  const availableHeight = pageUsesFixedGrid
-    ? remainingHeight
-    : availableWidth;
-  const visibleSize = Math.min(availableWidth, availableHeight);
+  const visibleSize = Math.min(frame.clientWidth, frame.clientHeight);
   const scale = Math.min(1, visibleSize / MIN_WDR_TABLE_SIZE);
   const renderSize = visibleSize / scale;
-  const borderWidth = tableSection.offsetWidth - tableSection.clientWidth;
-  const borderHeight = tableSection.offsetHeight - tableSection.clientHeight;
 
-  tableSection.style.width =
-    `${visibleSize + horizontalPadding + borderWidth}px`;
-  tableSection.style.height =
-    `${visibleSize + verticalPadding + headingHeight + borderHeight}px`;
-  frame.style.width = `${visibleSize}px`;
-  frame.style.height = `${visibleSize}px`;
-
-  if (scale < 1) {
-    tableElement.style.width = `${renderSize}px`;
-    tableElement.style.height = `${renderSize}px`;
-    tableElement.style.transform = `scale(${scale})`;
-  } else {
-    tableElement.style.width = `${renderSize}px`;
-    tableElement.style.height = `${renderSize}px`;
-    tableElement.style.transform = "none";
-  }
+  tableElement.style.width = `${renderSize}px`;
+  tableElement.style.height = `${renderSize}px`;
+  tableElement.style.transform = scale < 1 ? `scale(${scale})` : "none";
 
   return {
     width: Math.floor(renderSize) - WDR_SIZE_OFFSET,

@@ -5,6 +5,8 @@
   --color-label: #60717b;
   --color-border: #c6d7df;
   --color-surface: #ffffff;
+  --color-board-surface-top: #f8fcfd;
+  --color-board-surface-bottom: #e7f3f7;
   --color-page: #edf5f7;
   --page-max-width: 1500px;
   --page-inline-space: 32px;
@@ -117,6 +119,14 @@ button {
   background: var(--color-surface);
 }
 
+.table-section {
+  background: linear-gradient(
+    180deg,
+    var(--color-board-surface-top),
+    var(--color-board-surface-bottom)
+  );
+}
+
 .status-panel > div {
   min-height: 58px;
   padding: 10px 12px;
@@ -140,9 +150,9 @@ button {
 
 .table-section {
   display: flex;
+  width: 100%;
   min-width: 0;
   justify-self: center;
-  align-self: start;
   flex-direction: column;
   align-items: center;
   overflow: hidden;
@@ -151,9 +161,13 @@ button {
 
 .board-table-frame {
   position: relative;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 1;
   min-width: 0;
   min-height: 0;
-  flex: none;
+  flex: 1;
   overflow: hidden;
 }
 
@@ -314,6 +328,8 @@ button {
 
   .board-table-frame {
     flex: none;
+    width: 100%;
+    height: auto;
     aspect-ratio: 1;
   }
 }
