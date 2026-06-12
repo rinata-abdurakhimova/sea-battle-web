@@ -3,7 +3,8 @@ const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const HOST = "0.0.0.0";
 const BOARD_SIZE = 10;
 const FLEET = [5, 4, 3, 3, 2];
 const WATER = ".";
@@ -18,10 +19,20 @@ const games = new Map();
 let waitingSocketId = null;
 let nextRoomId = 1;
 
-app.use(express.static(__dirname));
+app.use("/css", express.static(path.join(__dirname, "css")));
+app.use("/js", express.static(path.join(__dirname, "js")));
+app.use("/images", express.static(path.join(__dirname, "images")));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("/battle.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "battle.html"));
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
 });
 
 io.on("connection", (socket) => {
@@ -77,7 +88,7 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`Sea Battle server is running at http://localhost:${PORT}`);
 });
 
