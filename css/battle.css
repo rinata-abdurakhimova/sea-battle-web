@@ -271,12 +271,6 @@ button {
   object-fit: contain;
 }
 
-.board-hit-icon,
-.board-miss-icon {
-  width: min(62%, 24px);
-  height: min(62%, 24px);
-}
-
 .board-table .wdr-empty {
   border-color: transparent;
 }
