@@ -300,6 +300,7 @@ function handleAiPlayerAttack(socket, game, rowIndex, colIndex) {
     const destroyedMessage = getDestroyedShipMessage(game.botBoard, target.shipId, "human");
 
     if (destroyedMessage) {
+      markCellsAroundDestroyedShip(game.botBoard, target.shipId);
       messages.push(destroyedMessage);
     }
 
@@ -370,6 +371,7 @@ function handleMultiplayerAttack(socket, game, rowIndex, colIndex) {
     );
 
     if (destroyedMessage) {
+      markCellsAroundDestroyedShip(game.boards[opponentNumber - 1], target.shipId);
       messages.push(destroyedMessage);
     }
 
@@ -401,6 +403,7 @@ function makeBotTurn(game) {
       const destroyedMessage = getDestroyedShipMessage(game.playerBoard, result.shipId, "bot");
 
       if (destroyedMessage) {
+        markCellsAroundDestroyedShip(game.playerBoard, result.shipId);
         messages.push(destroyedMessage);
       }
 
@@ -611,7 +614,7 @@ function getDestroyedShipMessage(board, shipId, actor) {
 
   const shipCells = getShipCells(board, shipId);
 
-  if (!shipCells.every((cell) => cell.wasShot)) {
+  if (!shipCells.every(({ cell }) => cell.wasShot)) {
     return "";
   }
 
@@ -627,7 +630,7 @@ function getDestroyedShipMessage(board, shipId, actor) {
 function getMultiplayerDestroyedShipMessage(board, shipId, playerNumber) {
   const shipCells = getShipCells(board, shipId);
 
-  if (!shipCells.every((cell) => cell.wasShot)) {
+  if (!shipCells.every(({ cell }) => cell.wasShot)) {
     return "";
   }
 
@@ -637,15 +640,27 @@ function getMultiplayerDestroyedShipMessage(board, shipId, playerNumber) {
 function getShipCells(board, shipId) {
   const cells = [];
 
-  board.forEach((row) => {
-    row.forEach((cell) => {
+  board.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
       if (cell.shipId === shipId) {
-        cells.push(cell);
+        cells.push({ cell, rowIndex, colIndex });
       }
     });
   });
 
   return cells;
+}
+
+function markCellsAroundDestroyedShip(board, shipId) {
+  getShipCells(board, shipId).forEach(({ rowIndex, colIndex }) => {
+    for (let row = rowIndex - 1; row <= rowIndex + 1; row += 1) {
+      for (let col = colIndex - 1; col <= colIndex + 1; col += 1) {
+        if (isBoardCell(row, col) && !board[row][col].hasShip) {
+          board[row][col].wasShot = true;
+        }
+      }
+    }
+  });
 }
 
 function isBoardCell(rowIndex, colIndex) {
