@@ -11,6 +11,7 @@
   --page-max-width: 1500px;
   --page-inline-space: 32px;
   --page-block-space: 20px;
+  --status-card-height: 76px;
 }
 
 * {
@@ -128,8 +129,15 @@ button {
 }
 
 .status-panel > div {
-  min-height: 58px;
+  height: var(--status-card-height);
+  overflow: hidden;
   padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.status-panel button {
+  height: var(--status-card-height);
 }
 
 .label {
@@ -338,6 +346,7 @@ button {
   :root {
     --page-inline-space: 12px;
     --page-block-space: 6px;
+    --status-card-height: 48px;
   }
 
   .battle-header {
@@ -361,11 +370,9 @@ button {
   }
 
   .status-panel > div {
-    min-height: 42px;
     padding: 4px 6px;
-    overflow: hidden;
-    font-size: 11px;
-    line-height: 1.1;
+    font-size: 10px;
+    line-height: 1.12;
   }
 
   .status-panel strong {
@@ -374,7 +381,6 @@ button {
   }
 
   .status-panel button {
-    min-height: 42px;
     padding: 0 8px;
     font-size: 12px;
   }
