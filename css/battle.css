@@ -159,6 +159,9 @@ button {
 .table-section {
   display: flex;
   width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  align-self: start;
   min-width: 0;
   justify-self: center;
   flex-direction: column;
@@ -233,11 +236,18 @@ button {
   overflow: hidden;
 }
 
-.board-table .wdr-header,
-.board-table .wdr-column-header,
-.board-coordinate {
+.board-table .wdr-grid-layout .wdr-header,
+.board-table .wdr-grid-layout .wdr-column-header {
   color: var(--color-heading);
-  font-weight: 800;
+  font-weight: normal;
+  text-align: center;
+  cursor: default;
+  user-select: none;
+}
+
+.page-shell .board-table #wdr-pivot-view .wdr-grid-layout .wdr-cell .board-coordinate {
+  color: var(--color-heading);
+  font-weight: bold;
   text-align: center;
   cursor: default;
   user-select: none;
@@ -246,6 +256,7 @@ button {
 .page-shell .board-table > #wdr-pivot-view .wdr-grid-layout .wdr-header-c,
 .page-shell .board-table > #wdr-pivot-view .wdr-grid-layout .wdr-column-header {
   padding: 0;
+  line-height: var(--board-cell-size);
   text-align: center;
 }
 
@@ -325,6 +336,8 @@ button {
   }
 
   .table-section {
+    aspect-ratio: auto;
+    align-self: auto;
     padding: 8px;
   }
 

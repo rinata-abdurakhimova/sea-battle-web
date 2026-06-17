@@ -174,10 +174,12 @@ function getTableDimensions(container) {
   const visibleSize = Math.min(frame.clientWidth, frame.clientHeight);
   const scale = Math.min(1, visibleSize / MIN_WDR_TABLE_SIZE);
   const renderSize = visibleSize / scale;
+  const cellSize = Math.floor(renderSize / GRID_SIZE);
 
   tableElement.style.width = `${renderSize}px`;
   tableElement.style.height = `${renderSize}px`;
   tableElement.style.transform = scale < 1 ? `scale(${scale})` : "none";
+  tableElement.style.setProperty("--board-cell-size", `${cellSize}px`);
 
   return {
     width: Math.floor(renderSize) - WDR_SIZE_OFFSET,
@@ -281,7 +283,7 @@ function blockCoordinateClicks(container) {
       eventName,
       (event) => {
         const coordinateCell = event.target.closest(
-          ".wdr-header, .wdr-column-header, .board-coordinate"
+          ".wdr-header, .wdr-column-header, .board-coordinate, .wdr-empty"
         );
 
         if (coordinateCell) {
