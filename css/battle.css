@@ -32,6 +32,11 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.page-shell.init-page {
+  grid-template-rows: auto;
+  place-content: center;
+}
+
 .page-shell {
   width: min(var(--page-max-width), calc(100% - var(--page-inline-space)));
   height: 100dvh;
