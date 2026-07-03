@@ -157,17 +157,20 @@ button {
 .boards-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
 }
 
 .table-section {
   display: flex;
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
   aspect-ratio: 1;
-  align-self: start;
+  align-self: stretch;
   min-width: 0;
+  min-height: 0;
   justify-self: center;
   flex-direction: column;
   align-items: center;
@@ -273,7 +276,7 @@ button {
 }
 
 .board-table .wdr-header[data-c="0"][data-r="0"] {
-  font-size: 8px;
+  font-size: 0!important;
 }
 
 .board-icon-wrap {
@@ -340,7 +343,14 @@ button {
     grid-column: span 2;
   }
 
+  .boards-layout {
+    grid-auto-rows: auto;
+  }
+
   .table-section {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
     aspect-ratio: auto;
     align-self: auto;
     padding: 8px;
